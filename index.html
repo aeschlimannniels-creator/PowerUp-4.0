@@ -27,8 +27,8 @@
   </div>
 
   <div class="card">
-    <p>Schub (Stick nach oben): <span id="throttleVal" class="val">0 %</span></p>
-    <p>Lenkung (Stick X): <span id="steeringVal" class="val">0</span></p>
+    <p>Schub (Linker Stick Hoch): <span id="throttleVal" class="val">0 %</span></p>
+    <p>Lenkung (Rechter Stick X): <span id="steeringVal" class="val">0</span></p>
     <p>Motor Links: <span id="motorLeftVal" class="val">0 %</span></p>
     <p>Motor Rechts: <span id="motorRightVal" class="val">0 %</span></p>
   </div>
@@ -66,7 +66,10 @@
         bleStatus.innerText = "Kopple mit Modul...";
         const server = await bleDevice.gatt.connect();
         
-        bleStatus.innerText = "Lade Dienste...";
+        // NEU: Wir warten 1,5 Sekunden, damit iOS/Bluefy Zeit hat, die Bluetooth-Dienste zu finden
+        bleStatus.innerText = "Gekoppelt! Lade Dienste (bitte warten)...";
+        await new Promise(resolve => setTimeout(resolve, 1500));
+
         const service = await server.getPrimaryService(SERVICE_UUID);
         controlCharacteristic = await service.getCharacteristic(CHARACTERISTIC_UUID);
 
@@ -74,7 +77,7 @@
         bleStatus.innerText = "Verbunden! Bereit in 1 Sekunde...";
         bleStatus.className = "status connected";
 
-        // 1 Sekunde Pause vor den ersten Befehlen, damit die Verbindung stabil bleibt
+        // Nochmals kurz warten, bevor wir Befehle senden dürfen
         setTimeout(() => {
           readyToSend = true;
           bleStatus.innerText = "Verbunden mit " + (bleDevice.name || "PowerUp 4.0");
@@ -105,15 +108,15 @@
       if (gp) {
         document.getElementById('gamepadStatus').innerText = gp.id.substring(0, 22) + "...";
 
-        // Stick Y auslesen (Invertieren: Stick nach oben = positiver Wert)
+        // Linker Stick Y-Achse (Index 1) - AUSSCHLIESSLICH Gas
         let rawY = -gp.axes[1]; 
-        let rawX = (gp.axes[2] !== undefined && Math.abs(gp.axes[2]) > 0.05) ? gp.axes[2] : gp.axes[0];
+        
+        // Rechter Stick X-Achse (Index 2) - AUSSCHLIESSLICH Lenkung
+        let rawX = gp.axes.length > 2 ? gp.axes[2] : 0; 
 
-        // Deadzone (kleine Ausschläge/Drift ignorieren)
         if (Math.abs(rawY) < 0.1) rawY = 0;
         if (Math.abs(rawX) < 0.1) rawX = 0;
 
-        // Schub NUR berechnen, wenn der Stick nach OBEN gedrückt wird (0% bis 100%)
         let throttle = 0;
         if (rawY > 0) {
           throttle = Math.round(rawY * 100);
@@ -121,7 +124,6 @@
 
         let steering = Math.round(rawX * 100);
 
-        // Differenzial-Steuerung für linken/rechten Motor
         let leftMotor = 0;
         let rightMotor = 0;
 
@@ -133,13 +135,11 @@
           rightMotor = Math.max(0, Math.min(100, Math.round(rightMotor)));
         }
 
-        // Werte anzeigen
         document.getElementById('throttleVal').innerText = throttle + " %";
         document.getElementById('steeringVal').innerText = steering;
         document.getElementById('motorLeftVal').innerText = leftMotor + " %";
         document.getElementById('motorRightVal').innerText = rightMotor + " %";
 
-        // Befehl senden
         if (readyToSend) {
           sendMotorCommands(leftMotor, rightMotor);
         }
