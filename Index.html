@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PowerUp 4.0 Controller</title>
+  <style>
+    body { font-family: -apple-system, sans-serif; background: #121212; color: #fff; text-align: center; padding: 20px; }
+    h1 { font-size: 20px; margin-bottom: 15px; }
+    button { background: #007aff; color: white; border: none; padding: 16px 24px; font-size: 17px; font-weight: bold; border-radius: 12px; cursor: pointer; width: 100%; max-width: 300px; }
+    .card { background: #1c1c1e; padding: 15px; border-radius: 12px; margin-top: 15px; text-align: left; }
+    .status { font-weight: bold; color: #0a84ff; }
+    .val { font-weight: bold; color: #30d158; font-size: 18px; }
+  </style>
+</head>
+<body>
+
+  <h1>PowerUp 4.0 Steuerung</h1>
+  <button id="connectBtn">PowerUp 4.0 Verbinden</button>
+
+  <div class="card">
+    <p><strong>Bluetooth:</strong> <span id="bleStatus" class="status">Nicht verbunden</span></p>
+    <p><strong>Gamepad:</strong> <span id="gamepadStatus" class="status">Taste drücken...</span></p>
+  </div>
+
+  <div class="card">
+    <p>Schub (Linker Stick Y): <span id="throttleVal" class="val">0 %</span></p>
+    <p>Lenkung (Rechter Stick X): <span id="steeringVal" class="val">0</span></p>
+  </div>
+
+  <script>
+    let bleDevice, gattServer;
+
+    document.getElementById('connectBtn').addEventListener('click', async () => {
+      try {
+        document.getElementById('bleStatus').innerText = "Suche Gerät...";
+        bleDevice = await navigator.bluetooth.requestDevice({
+          acceptAllDevices: true,
+          optionalServices: ['0000fef5-0000-1000-8000-00805f9b34fb']
+        });
+
+        gattServer = await bleDevice.gatt.connect();
+        document.getElementById('bleStatus').innerText = "Verbunden mit " + bleDevice.name;
+      } catch (err) {
+        document.getElementById('bleStatus').innerText = "Fehler: " + err.message;
+      }
+    });
+
+    function loop() {
+      const gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
+      const gp = gamepads[0] || gamepads[1] || gamepads[2] || gamepads[3];
+
+      if (gp) {
+        document.getElementById('gamepadStatus').innerText = gp.id.substring(0, 18) + "...";
+
+        let throttle = Math.round((-gp.axes[1] + 1) / 2 * 100);
+        throttle = Math.max(0, Math.min(100, throttle));
+
+        let steering = Math.round((gp.axes[2] !== undefined ? gp.axes[2] : gp.axes[0]) * 100);
+
+        document.getElementById('throttleVal').innerText = throttle + " %";
+        document.getElementById('steeringVal').innerText = steering;
+      } else {
+        document.getElementById('gamepadStatus').innerText = "Kein Controller aktiv (Taste drücken)";
+      }
+      requestAnimationFrame(loop);
+    }
+
+    requestAnimationFrame(loop);
+  </script>
+</body>
+</html>
