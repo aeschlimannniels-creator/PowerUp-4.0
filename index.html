@@ -11,20 +11,27 @@
     h1 { font-size: 22px; margin-bottom: 15px; margin-top: 20px; }
     button { background: #007aff; color: white; border: none; padding: 16px 24px; font-size: 17px; font-weight: bold; border-radius: 12px; cursor: pointer; width: 100%; max-width: 320px; margin-bottom: 15px; }
     button:active { background: #0056b3; }
+    
+    /* Neuer Button zum Freischalten */
+    #armBtn { background: #ff9f0a; display: none; margin-top: 10px; }
+    #armBtn:active { background: #cc7f08; }
+
     .card { background: #1c1c1e; padding: 15px; border-radius: 12px; margin-top: 15px; text-align: left; max-width: 320px; margin-left: auto; margin-right: auto; }
     .status { font-weight: bold; color: #0a84ff; }
     .val { font-weight: bold; color: #30d158; font-size: 18px; }
     .connected { color: #30d158; }
     .disconnected { color: #ff453a; }
+    .warning { color: #ff9f0a; }
   </style>
 </head>
 <body>
 
   <!-- Aktualisierte Versionsanzeige -->
-  <div class="version">v.1.1</div>
+  <div class="version">v.1.2</div>
 
   <h1>PowerUp 4.0 Steuerung</h1>
   <button id="connectBtn">PowerUp 4.0 Verbinden</button>
+  <button id="armBtn">🚀 Motoren Freischalten</button>
 
   <div class="card">
     <p><strong>Bluetooth:</strong> <span id="bleStatus" class="status disconnected">Nicht verbunden</span></p>
@@ -32,15 +39,16 @@
   </div>
 
   <div class="card">
-    <p>Schub (Linker Stick Hoch): <span id="throttleVal" class="val">0 %</span></p>
-    <p>Lenkung (Rechter Stick X): <span id="steeringVal" class="val">0</span></p>
+    <p>Schub (L. Stick Hoch): <span id="throttleVal" class="val">0 %</span></p>
+    <p>Lenkung (R. Stick X): <span id="steeringVal" class="val">0</span></p>
     <p>Motor Links: <span id="motorLeftVal" class="val">0 %</span></p>
     <p>Motor Rechts: <span id="motorRightVal" class="val">0 %</span></p>
   </div>
 
   <script>
-    const SERVICE_UUID = '0000fef5-0000-1000-8000-00805f9b34fb';
-    const CHARACTERISTIC_UUID = '0000b012-0000-1000-8000-00805f9b34fb';
+    // Offizielle TailorToys Service UUID (Kurz- und Langform für iOS)
+    const SERVICE_UUID_16 = 0xFEF5;
+    const SERVICE_UUID_128 = '0000fef5-0000-1000-8000-00805f9b34fb';
 
     let bleDevice = null;
     let controlCharacteristic = null;
@@ -49,21 +57,17 @@
 
     document.getElementById('connectBtn').addEventListener('click', async () => {
       const bleStatus = document.getElementById('bleStatus');
-
-      if (!navigator.bluetooth) {
-        bleStatus.innerText = "Fehler: Web Bluetooth wird nicht unterstützt!";
-        bleStatus.className = "status disconnected";
-        return;
-      }
+      const armBtn = document.getElementById('armBtn');
+      document.getElementById('connectBtn').style.display = 'none';
 
       try {
         readyToSend = false;
-        bleStatus.innerText = "Suche Geräte...";
+        bleStatus.innerText = "Suche Flugzeug...";
         bleStatus.className = "status";
 
         bleDevice = await navigator.bluetooth.requestDevice({
           acceptAllDevices: true,
-          optionalServices: [SERVICE_UUID]
+          optionalServices: [SERVICE_UUID_16, SERVICE_UUID_128]
         });
 
         bleDevice.addEventListener('gattserverdisconnected', onDisconnected);
@@ -71,42 +75,67 @@
         bleStatus.innerText = "Verbinde mit Modul...";
         const server = await bleDevice.gatt.connect();
         
-        bleStatus.innerText = "Verbindung steht! Lade Steuerung...";
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        bleStatus.innerText = "Lade Steuerung (Auto-Suche)...";
+        await new Promise(resolve => setTimeout(resolve, 500));
 
-        const service = await server.getPrimaryService(SERVICE_UUID);
-        controlCharacteristic = await service.getCharacteristic(CHARACTERISTIC_UUID);
+        // Dynamischer Suchlauf: Verhindert Fehler 2
+        let service;
+        try {
+          service = await server.getPrimaryService(SERVICE_UUID_16);
+        } catch (e) {
+          service = await server.getPrimaryService(SERVICE_UUID_128);
+        }
+
+        // Wir suchen automatisch den richtigen Kanal, statt ihn hart vorzugeben
+        const characteristics = await service.getCharacteristics();
+        for (let char of characteristics) {
+          if (char.properties.write || char.properties.writeWithoutResponse) {
+            controlCharacteristic = char;
+            break; // Erste schreibbare Charakteristik nehmen
+          }
+        }
+
+        if (!controlCharacteristic) {
+          throw new Error("Kein Steuerkanal gefunden");
+        }
 
         isConnected = true;
-        bleStatus.innerText = "Schalte Motoren scharf (Null-Gas)...";
-        bleStatus.className = "status connected";
-
-        // ARMING-SEQUENZ: Sende 1,5 Sekunden lang Null-Gas, um die Motorregler freizuschalten
-        let armingCount = 0;
-        const armingInterval = setInterval(async () => {
-          await writeToModule(0, 0);
-          armingCount++;
-          if (armingCount >= 15) {
-            clearInterval(armingInterval);
-            readyToSend = true;
-            bleStatus.innerText = "Startbereit! Verbunden mit " + (bleDevice.name || "PowerUp 4.0");
-          }
-        }, 100);
+        bleStatus.innerText = "Verbunden! Bitte Freischalten drücken.";
+        bleStatus.className = "status warning";
+        
+        // Zeige den Sicherheitsknopf an (wie in der echten App)
+        armBtn.style.display = 'inline-block';
 
       } catch (err) {
         console.error("Verbindungsfehler:", err);
-        // Fehler abfangen, damit die Verbindung nicht als getrennt markiert wird, falls GATT-Warnungen auftreten
-        if (bleDevice && bleDevice.gatt.connected && controlCharacteristic) {
-          isConnected = true;
-          readyToSend = true;
-          bleStatus.innerText = "Verbunden (Eingeschränkter Modus)";
-          bleStatus.className = "status connected";
-        } else {
-          isConnected = false;
-          readyToSend = false;
-          bleStatus.innerText = "Fehler: " + (err.message || err);
-          bleStatus.className = "status disconnected";
+        isConnected = false;
+        document.getElementById('connectBtn').style.display = 'inline-block';
+        armBtn.style.display = 'none';
+        bleStatus.innerText = "Fehler: " + (err.message || err);
+        bleStatus.className = "status disconnected";
+      }
+    });
+
+    // Logik für den Sicherheits-Knopf
+    document.getElementById('armBtn').addEventListener('click', async () => {
+      const bleStatus = document.getElementById('bleStatus');
+      document.getElementById('armBtn').style.display = 'none';
+      bleStatus.innerText = "Entsichere Regler...";
+      bleStatus.className = "status warning";
+
+      try {
+        // Sende die Null-Gas Sequenz, um den Flugzeug-Regler freizuschalten
+        for(let i = 0; i < 15; i++) {
+          await writeToModule(0, 0);
+          await new Promise(resolve => setTimeout(resolve, 100));
         }
+        
+        readyToSend = true;
+        bleStatus.innerText = "Startbereit! Motoren aktiv.";
+        bleStatus.className = "status connected";
+      } catch (err) {
+        bleStatus.innerText = "Freischalt-Fehler: " + err.message;
+        bleStatus.className = "status disconnected";
       }
     });
 
@@ -114,6 +143,8 @@
       isConnected = false;
       readyToSend = false;
       controlCharacteristic = null;
+      document.getElementById('connectBtn').style.display = 'inline-block';
+      document.getElementById('armBtn').style.display = 'none';
       const bleStatus = document.getElementById('bleStatus');
       bleStatus.innerText = "Verbindung getrennt";
       bleStatus.className = "status disconnected";
@@ -126,20 +157,14 @@
       if (gp) {
         document.getElementById('gamepadStatus').innerText = gp.id.substring(0, 22) + "...";
 
-        // Linker Stick Y-Achse (Gas)
         let rawY = -gp.axes[1]; 
-        
-        // Rechter Stick X-Achse (Lenkung)
         let rawX = gp.axes.length > 2 ? gp.axes[2] : 0; 
 
         if (Math.abs(rawY) < 0.15) rawY = 0;
         if (Math.abs(rawX) < 0.15) rawX = 0;
 
         let throttle = 0;
-        if (rawY > 0) {
-          throttle = Math.round(rawY * 100);
-        }
-
+        if (rawY > 0) throttle = Math.round(rawY * 100);
         let steering = Math.round(rawX * 100);
 
         let leftMotor = 0;
@@ -162,7 +187,7 @@
           sendMotorCommands(leftMotor, rightMotor);
         }
       } else {
-        document.getElementById('gamepadStatus').innerText = "Kein Controller aktiv (Taste drücken)";
+        document.getElementById('gamepadStatus').innerText = "Kein Controller aktiv";
       }
 
       requestAnimationFrame(loop);
@@ -171,36 +196,29 @@
     let lastSendTime = 0;
     async function sendMotorCommands(left, right) {
       const now = Date.now();
-      if (!isConnected || !readyToSend || !controlCharacteristic || (now - lastSendTime < 60)) {
+      if (!isConnected || !readyToSend || !controlCharacteristic || (now - lastSendTime < 80)) {
         return; 
       }
       lastSendTime = now;
 
       const leftPwm = Math.round((left / 100) * 255);
       const rightPwm = Math.round((right / 100) * 255);
-
       await writeToModule(leftPwm, rightPwm);
     }
 
-    // Robuste Schreib-Funktion mit Fallback für iOS/Bluefy
     async function writeToModule(leftByte, rightByte) {
       if (!controlCharacteristic) return;
       
       const data = new Uint8Array([leftByte, rightByte]);
       
       try {
-        if (controlCharacteristic.writeValueWithoutResponse) {
+        if (controlCharacteristic.properties.writeWithoutResponse) {
           await controlCharacteristic.writeValueWithoutResponse(data);
         } else {
           await controlCharacteristic.writeValue(data);
         }
       } catch (e) {
-        // Zweiter Versuch mit der alternativen Schreib-Methode bei GATT-Fehler
-        try {
-          await controlCharacteristic.writeValue(data);
-        } catch (err2) {
-          console.warn("BLE Schreib-Fehler abgefangen:", err2);
-        }
+        console.warn("BLE Schreib-Warnung:", e);
       }
     }
 
