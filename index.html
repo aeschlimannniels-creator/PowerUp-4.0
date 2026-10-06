@@ -12,7 +12,7 @@
     button { background: #007aff; color: white; border: none; padding: 16px 24px; font-size: 17px; font-weight: bold; border-radius: 12px; cursor: pointer; width: 100%; max-width: 320px; margin-bottom: 15px; }
     button:active { background: #0056b3; }
     
-    /* Neuer Button zum Freischalten */
+    /* Der Freischalt-Button */
     #armBtn { background: #ff9f0a; display: none; margin-top: 10px; }
     #armBtn:active { background: #cc7f08; }
 
@@ -26,8 +26,8 @@
 </head>
 <body>
 
-  <!-- Aktualisierte Versionsanzeige -->
-  <div class="version">v.1.2</div>
+  <!-- Neue Version v.1.3 -->
+  <div class="version">v.1.3</div>
 
   <h1>PowerUp 4.0 Steuerung</h1>
   <button id="connectBtn">PowerUp 4.0 Verbinden</button>
@@ -46,9 +46,8 @@
   </div>
 
   <script>
-    // Offizielle TailorToys Service UUID (Kurz- und Langform für iOS)
-    const SERVICE_UUID_16 = 0xFEF5;
-    const SERVICE_UUID_128 = '0000fef5-0000-1000-8000-00805f9b34fb';
+    // Wieder auf die Einzel-Adresse aus v.1.1 gewechselt, da Bluefy sonst abstürzt
+    const SERVICE_UUID = '0000fef5-0000-1000-8000-00805f9b34fb';
 
     let bleDevice = null;
     let controlCharacteristic = null;
@@ -65,9 +64,10 @@
         bleStatus.innerText = "Suche Flugzeug...";
         bleStatus.className = "status";
 
+        // Hier nutzen wir wieder den funktionierenden Code aus 1.1
         bleDevice = await navigator.bluetooth.requestDevice({
           acceptAllDevices: true,
-          optionalServices: [SERVICE_UUID_16, SERVICE_UUID_128]
+          optionalServices: [SERVICE_UUID]
         });
 
         bleDevice.addEventListener('gattserverdisconnected', onDisconnected);
@@ -75,23 +75,17 @@
         bleStatus.innerText = "Verbinde mit Modul...";
         const server = await bleDevice.gatt.connect();
         
-        bleStatus.innerText = "Lade Steuerung (Auto-Suche)...";
+        bleStatus.innerText = "Lade Steuerung...";
         await new Promise(resolve => setTimeout(resolve, 500));
 
-        // Dynamischer Suchlauf: Verhindert Fehler 2
-        let service;
-        try {
-          service = await server.getPrimaryService(SERVICE_UUID_16);
-        } catch (e) {
-          service = await server.getPrimaryService(SERVICE_UUID_128);
-        }
-
-        // Wir suchen automatisch den richtigen Kanal, statt ihn hart vorzugeben
+        const service = await server.getPrimaryService(SERVICE_UUID);
+        
+        // Auto-Discovery: Code sucht sich selbst den richtigen Kanal zum Schreiben
         const characteristics = await service.getCharacteristics();
         for (let char of characteristics) {
           if (char.properties.write || char.properties.writeWithoutResponse) {
             controlCharacteristic = char;
-            break; // Erste schreibbare Charakteristik nehmen
+            break; 
           }
         }
 
@@ -103,7 +97,7 @@
         bleStatus.innerText = "Verbunden! Bitte Freischalten drücken.";
         bleStatus.className = "status warning";
         
-        // Zeige den Sicherheitsknopf an (wie in der echten App)
+        // Zeige den Sicherheitsknopf an
         armBtn.style.display = 'inline-block';
 
       } catch (err) {
@@ -116,7 +110,6 @@
       }
     });
 
-    // Logik für den Sicherheits-Knopf
     document.getElementById('armBtn').addEventListener('click', async () => {
       const bleStatus = document.getElementById('bleStatus');
       document.getElementById('armBtn').style.display = 'none';
@@ -124,7 +117,7 @@
       bleStatus.className = "status warning";
 
       try {
-        // Sende die Null-Gas Sequenz, um den Flugzeug-Regler freizuschalten
+        // Sende die Null-Gas Sequenz, um den Regler freizuschalten
         for(let i = 0; i < 15; i++) {
           await writeToModule(0, 0);
           await new Promise(resolve => setTimeout(resolve, 100));
