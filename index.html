@@ -1,221 +1,346 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>PowerUp 4.0 Controller</title>
-  <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #121212; color: #fff; text-align: center; padding: 20px; position: relative; }
-    .version { position: absolute; top: 15px; right: 15px; font-size: 16px; color: #30d158; font-weight: bold; }
-    
-    h1 { font-size: 22px; margin-bottom: 15px; margin-top: 20px; }
-    button { background: #007aff; color: white; border: none; padding: 16px 24px; font-size: 17px; font-weight: bold; border-radius: 12px; cursor: pointer; width: 100%; max-width: 320px; margin-bottom: 15px; }
-    button:active { background: #0056b3; }
-    
-    /* Der Freischalt-Button */
-    #armBtn { background: #ff9f0a; display: none; margin-top: 10px; }
-    #armBtn:active { background: #cc7f08; }
-
-    .card { background: #1c1c1e; padding: 15px; border-radius: 12px; margin-top: 15px; text-align: left; max-width: 320px; margin-left: auto; margin-right: auto; }
-    .status { font-weight: bold; color: #0a84ff; }
-    .val { font-weight: bold; color: #30d158; font-size: 18px; }
-    .connected { color: #30d158; }
-    .disconnected { color: #ff453a; }
-    .warning { color: #ff9f0a; }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>PowerUp 4.0 Cockpit v1.4</title>
+    <style>
+        :root {
+            --bg-color: #0b0e14;
+            --panel-bg: #151a22;
+            --accent: #00ffcc;
+            --danger: #ff3366;
+            --text: #e0e6ed;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            overflow-x: hidden;
+        }
+        h1 {
+            color: var(--accent);
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            font-size: 1.5rem;
+            text-align: center;
+        }
+        .status-box {
+            background-color: var(--panel-bg);
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 15px;
+            width: 100%;
+            max-width: 400px;
+            text-align: center;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+        #log {
+            font-family: monospace;
+            color: #8892b0;
+            font-size: 0.85rem;
+            margin-top: 10px;
+            height: 60px;
+            overflow-y: hidden;
+        }
+        button {
+            background-color: var(--accent);
+            color: #000;
+            border: none;
+            border-radius: 8px;
+            padding: 15px 30px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 0 15px rgba(0, 255, 204, 0.4);
+            transition: transform 0.1s;
+            width: 100%;
+            max-width: 400px;
+            margin-bottom: 10px;
+        }
+        button:active {
+            transform: scale(0.96);
+        }
+        button.danger {
+            background-color: var(--danger);
+            box-shadow: 0 0 15px rgba(255, 51, 102, 0.4);
+        }
+        /* Cockpit UI */
+        #cockpit {
+            display: none;
+            width: 100%;
+            max-width: 400px;
+            flex-direction: column;
+            gap: 30px;
+        }
+        .control-group {
+            background-color: var(--panel-bg);
+            padding: 20px;
+            border-radius: 12px;
+            border: 1px solid #333;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .control-label {
+            font-weight: bold;
+            letter-spacing: 1px;
+            margin-bottom: 15px;
+            color: #a8b2c1;
+        }
+        .val-display {
+            font-size: 1.5rem;
+            color: var(--accent);
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        /* Virtueller Schub-Slider (Vertikal) */
+        .slider-vertical-wrapper {
+            width: 60px;
+            height: 250px;
+            position: relative;
+            margin: 20px 0;
+        }
+        .slider-vertical-wrapper input[type=range] {
+            width: 250px;
+            height: 60px;
+            position: absolute;
+            top: 95px;
+            left: -95px;
+            transform: rotate(-90deg);
+            margin: 0;
+        }
+        /* Lenkungs-Slider (Horizontal) */
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 36px;
+            width: 36px;
+            border-radius: 50%;
+            background: var(--accent);
+            cursor: pointer;
+            margin-top: -14px;
+            box-shadow: 0 0 10px rgba(0, 255, 204, 0.6);
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 8px;
+            cursor: pointer;
+            background: #2a3241;
+            border-radius: 4px;
+        }
+    </style>
 </head>
 <body>
 
-  <!-- Neue Version v.1.3 -->
-  <div class="version">v.1.3</div>
+    <h1>PowerUp 4.0 System</h1>
+    
+    <div class="status-box">
+        <div id="status-text">Warte auf Verbindung...</div>
+        <div id="log">Bereit.</div>
+    </div>
 
-  <h1>PowerUp 4.0 Steuerung</h1>
-  <button id="connectBtn">PowerUp 4.0 Verbinden</button>
-  <button id="armBtn">🚀 Motoren Freischalten</button>
+    <div id="setup-screen">
+        <button id="connect-btn">Mit Flugzeug verbinden</button>
+    </div>
 
-  <div class="card">
-    <p><strong>Bluetooth:</strong> <span id="bleStatus" class="status disconnected">Nicht verbunden</span></p>
-    <p><strong>Gamepad:</strong> <span id="gamepadStatus" class="status">Taste drücken...</span></p>
-  </div>
+    <div id="cockpit">
+        <button id="tilt-btn">Neigungssteuerung (iPhone) aktivieren</button>
+        
+        <div class="control-group">
+            <div class="control-label">SCHUB (THRUST)</div>
+            <div class="val-display" id="thrust-val">0 %</div>
+            <div class="slider-vertical-wrapper">
+                <input type="range" id="thrust-slider" min="0" max="254" value="0">
+            </div>
+        </div>
 
-  <div class="card">
-    <p>Schub (L. Stick Hoch): <span id="throttleVal" class="val">0 %</span></p>
-    <p>Lenkung (R. Stick X): <span id="steeringVal" class="val">0</span></p>
-    <p>Motor Links: <span id="motorLeftVal" class="val">0 %</span></p>
-    <p>Motor Rechts: <span id="motorRightVal" class="val">0 %</span></p>
-  </div>
+        <div class="control-group">
+            <div class="control-label">LENKUNG (STEERING)</div>
+            <div class="val-display" id="steering-val">Zentriert</div>
+            <input type="range" id="steering-slider" min="-128" max="127" value="0">
+        </div>
 
-  <script>
-    // Wieder auf die Einzel-Adresse aus v.1.1 gewechselt, da Bluefy sonst abstürzt
-    const SERVICE_UUID = '0000fef5-0000-1000-8000-00805f9b34fb';
+        <button id="disconnect-btn" class="danger">Verbindung trennen</button>
+    </div>
 
-    let bleDevice = null;
-    let controlCharacteristic = null;
-    let isConnected = false;
-    let readyToSend = false;
+    <script>
+        let bleDevice;
+        let bleServer;
+        let writeCharacteristics = [];
+        let transmitLoop;
 
-    document.getElementById('connectBtn').addEventListener('click', async () => {
-      const bleStatus = document.getElementById('bleStatus');
-      const armBtn = document.getElementById('armBtn');
-      document.getElementById('connectBtn').style.display = 'none';
+        const uiLog = document.getElementById('log');
+        const uiStatus = document.getElementById('status-text');
+        
+        function logMsg(msg) {
+            console.log(msg);
+            uiLog.innerText = msg;
+        }
 
-      try {
-        readyToSend = false;
-        bleStatus.innerText = "Suche Flugzeug...";
-        bleStatus.className = "status";
+        // Bekannte Services für PowerUp und generische BLE-Module
+        const OPTIONAL_SERVICES = [
+            "0000fef5-0000-1000-8000-00805f9b34fb", // Dialog OTA (Verursacht oft Fehler 2, wird mit try-catch abgefangen)
+            "86c3810e-f171-40d9-a117-26b300768cd6", // PU Custom Base
+            "0000f171-0000-1000-8000-00805f9b34fb", // PU 16-bit 
+            "6e400001-b5a3-f393-e0a9-e50e24dcca9e", // Nordic UART
+            "0000180f-0000-1000-8000-00805f9b34fb"  // Batterie
+        ];
 
-        // Hier nutzen wir wieder den funktionierenden Code aus 1.1
-        bleDevice = await navigator.bluetooth.requestDevice({
-          acceptAllDevices: true,
-          optionalServices: [SERVICE_UUID]
+        document.getElementById('connect-btn').addEventListener('click', async () => {
+            try {
+                logMsg("Fordere Bluetooth an...");
+                bleDevice = await navigator.bluetooth.requestDevice({
+                    acceptAllDevices: true,
+                    optionalServices: OPTIONAL_SERVICES
+                });
+
+                bleDevice.addEventListener('gattserverdisconnected', () => {
+                    logMsg("Verbindung getrennt!");
+                    clearInterval(transmitLoop);
+                    document.getElementById('setup-screen').style.display = 'block';
+                    document.getElementById('cockpit').style.display = 'none';
+                });
+
+                uiStatus.innerText = "Verbinde mit " + bleDevice.name;
+                bleServer = await bleDevice.gatt.connect();
+                
+                logMsg("Suche alle Dienste...");
+                const services = await bleServer.getPrimaryServices();
+                
+                // Der Fehler-2 Bypass: Wir scannen alle Dienste einzeln.
+                for (let service of services) {
+                    try {
+                        logMsg("Prüfe Dienst: " + service.uuid.substring(0,8));
+                        const characteristics = await service.getCharacteristics();
+                        
+                        for (let char of characteristics) {
+                            if (char.properties.write || char.properties.writeWithoutResponse) {
+                                writeCharacteristics.push(char);
+                                logMsg("Schreib-Charakteristik gefunden!");
+                            }
+                        }
+                    } catch (err) {
+                        // Hier wird der Fehler 2 gefangen, ohne den Aufbau abzubrechen!
+                        logMsg(`Dienst ${service.uuid.substring(0,4)} gesperrt (Fehler 2 übersprungen).`);
+                    }
+                }
+
+                if (writeCharacteristics.length > 0) {
+                    uiStatus.innerText = "COCKPIT BEREIT";
+                    uiStatus.style.color = "#00ffcc";
+                    document.getElementById('setup-screen').style.display = 'none';
+                    document.getElementById('cockpit').style.display = 'flex';
+                    
+                    // Starte den kontinuierlichen Signal-Loop der App (10x pro Sekunde)
+                    transmitLoop = setInterval(transmitSignal, 100);
+                } else {
+                    uiStatus.innerText = "Fehler: Keine Steuerung gefunden.";
+                    uiStatus.style.color = "#ff3366";
+                }
+
+            } catch (error) {
+                logMsg("Setup-Fehler: " + error);
+                uiStatus.innerText = "Verbindung fehlgeschlagen";
+            }
         });
 
-        bleDevice.addEventListener('gattserverdisconnected', onDisconnected);
+        document.getElementById('disconnect-btn').addEventListener('click', () => {
+            if (bleDevice && bleDevice.gatt.connected) {
+                bleDevice.gatt.disconnect();
+            }
+        });
 
-        bleStatus.innerText = "Verbinde mit Modul...";
-        const server = await bleDevice.gatt.connect();
+        // --- STEUERUNGS LOGIK ---
         
-        bleStatus.innerText = "Lade Steuerung...";
-        await new Promise(resolve => setTimeout(resolve, 500));
+        async function transmitSignal() {
+            if (writeCharacteristics.length === 0) return;
 
-        const service = await server.getPrimaryService(SERVICE_UUID);
+            let thrust = parseInt(document.getElementById('thrust-slider').value);
+            let steering = parseInt(document.getElementById('steering-slider').value);
+            
+            // UI Update
+            document.getElementById('thrust-val').innerText = Math.round((thrust/254)*100) + " %";
+            if (steering === 0) document.getElementById('steering-val').innerText = "Zentriert";
+            else if (steering < 0) document.getElementById('steering-val').innerText = "Links (" + Math.abs(steering) + ")";
+            else document.getElementById('steering-val').innerText = "Rechts (" + steering + ")";
+
+            // Die Standard-Befehlskette. Wenn das Modul einen Raw-UART hat, reicht oft ein [Thrust, Steering] Array.
+            // Math.abs(steering) konvertiert die Negativwerte in absolute Bytes, da Uint8Array keine negativen Zahlen fasst. 
+            // In zukünftigen Iterationen können wir das Protokoll bei Bedarf byte-genau anpassen.
+            let payload = new Uint8Array([thrust, Math.abs(steering)]);
+
+            try {
+                // Wir feuern den Payload an die offene Charakteristik
+                for (let char of writeCharacteristics) {
+                    // Verhindere das Schreiben in den OTA Dienst, falls dieser doch irrtümlich offen wäre
+                    if (!char.service.uuid.includes("fef5")) {
+                        await char.writeValueWithoutResponse(payload);
+                    }
+                }
+            } catch (err) {
+                // Stille Fehlerbehandlung, um den Loop nicht zu zerstören
+            }
+        }
+
+        // --- iPHONE NEIGUNGSSENSOR ---
         
-        // Auto-Discovery: Code sucht sich selbst den richtigen Kanal zum Schreiben
-        const characteristics = await service.getCharacteristics();
-        for (let char of characteristics) {
-          if (char.properties.write || char.properties.writeWithoutResponse) {
-            controlCharacteristic = char;
-            break; 
-          }
+        document.getElementById('tilt-btn').addEventListener('click', async () => {
+            if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+                try {
+                    const permission = await DeviceOrientationEvent.requestPermission();
+                    if (permission === 'granted') {
+                        window.addEventListener('deviceorientation', handleOrientation);
+                        activateTiltUI();
+                    } else {
+                        alert("Sensor-Erlaubnis verweigert.");
+                    }
+                } catch (error) {
+                    alert("Neigungssensor-Fehler: " + error);
+                }
+            } else {
+                // Fallback
+                window.addEventListener('deviceorientation', handleOrientation);
+                activateTiltUI();
+            }
+        });
+
+        function activateTiltUI() {
+            const btn = document.getElementById('tilt-btn');
+            btn.innerText = "Neigungssensor: AKTIV";
+            btn.style.backgroundColor = "#34C759";
+            btn.style.boxShadow = "0 0 15px rgba(52, 199, 89, 0.4)";
         }
 
-        if (!controlCharacteristic) {
-          throw new Error("Kein Steuerkanal gefunden");
+        function handleOrientation(event) {
+            let gamma = event.gamma; // Links/Rechts Neigung (-90 bis 90)
+            
+            // Begrenze den Neigungswinkel auf 45 Grad für volle Lenkung
+            if (gamma > 45) gamma = 45;
+            if (gamma < -45) gamma = -45;
+            
+            // Konvertiere -45 bis 45 Grad in den Slider-Bereich -128 bis 127
+            let mappedSteering = Math.round((gamma / 45) * 127);
+            document.getElementById('steering-slider').value = mappedSteering;
         }
 
-        isConnected = true;
-        bleStatus.innerText = "Verbunden! Bitte Freischalten drücken.";
-        bleStatus.className = "status warning";
-        
-        // Zeige den Sicherheitsknopf an
-        armBtn.style.display = 'inline-block';
-
-      } catch (err) {
-        console.error("Verbindungsfehler:", err);
-        isConnected = false;
-        document.getElementById('connectBtn').style.display = 'inline-block';
-        armBtn.style.display = 'none';
-        bleStatus.innerText = "Fehler: " + (err.message || err);
-        bleStatus.className = "status disconnected";
-      }
-    });
-
-    document.getElementById('armBtn').addEventListener('click', async () => {
-      const bleStatus = document.getElementById('bleStatus');
-      document.getElementById('armBtn').style.display = 'none';
-      bleStatus.innerText = "Entsichere Regler...";
-      bleStatus.className = "status warning";
-
-      try {
-        // Sende die Null-Gas Sequenz, um den Regler freizuschalten
-        for(let i = 0; i < 15; i++) {
-          await writeToModule(0, 0);
-          await new Promise(resolve => setTimeout(resolve, 100));
-        }
-        
-        readyToSend = true;
-        bleStatus.innerText = "Startbereit! Motoren aktiv.";
-        bleStatus.className = "status connected";
-      } catch (err) {
-        bleStatus.innerText = "Freischalt-Fehler: " + err.message;
-        bleStatus.className = "status disconnected";
-      }
-    });
-
-    function onDisconnected() {
-      isConnected = false;
-      readyToSend = false;
-      controlCharacteristic = null;
-      document.getElementById('connectBtn').style.display = 'inline-block';
-      document.getElementById('armBtn').style.display = 'none';
-      const bleStatus = document.getElementById('bleStatus');
-      bleStatus.innerText = "Verbindung getrennt";
-      bleStatus.className = "status disconnected";
-    }
-
-    function loop() {
-      const gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
-      const gp = Array.from(gamepads).find(g => g !== null);
-
-      if (gp) {
-        document.getElementById('gamepadStatus').innerText = gp.id.substring(0, 22) + "...";
-
-        let rawY = -gp.axes[1]; 
-        let rawX = gp.axes.length > 2 ? gp.axes[2] : 0; 
-
-        if (Math.abs(rawY) < 0.15) rawY = 0;
-        if (Math.abs(rawX) < 0.15) rawX = 0;
-
-        let throttle = 0;
-        if (rawY > 0) throttle = Math.round(rawY * 100);
-        let steering = Math.round(rawX * 100);
-
-        let leftMotor = 0;
-        let rightMotor = 0;
-
-        if (throttle > 0) {
-          leftMotor = throttle + (steering * 0.5);
-          rightMotor = throttle - (steering * 0.5);
-
-          leftMotor = Math.max(0, Math.min(100, Math.round(leftMotor)));
-          rightMotor = Math.max(0, Math.min(100, Math.round(rightMotor)));
-        }
-
-        document.getElementById('throttleVal').innerText = throttle + " %";
-        document.getElementById('steeringVal').innerText = steering;
-        document.getElementById('motorLeftVal').innerText = leftMotor + " %";
-        document.getElementById('motorRightVal').innerText = rightMotor + " %";
-
-        if (readyToSend) {
-          sendMotorCommands(leftMotor, rightMotor);
-        }
-      } else {
-        document.getElementById('gamepadStatus').innerText = "Kein Controller aktiv";
-      }
-
-      requestAnimationFrame(loop);
-    }
-
-    let lastSendTime = 0;
-    async function sendMotorCommands(left, right) {
-      const now = Date.now();
-      if (!isConnected || !readyToSend || !controlCharacteristic || (now - lastSendTime < 80)) {
-        return; 
-      }
-      lastSendTime = now;
-
-      const leftPwm = Math.round((left / 100) * 255);
-      const rightPwm = Math.round((right / 100) * 255);
-      await writeToModule(leftPwm, rightPwm);
-    }
-
-    async function writeToModule(leftByte, rightByte) {
-      if (!controlCharacteristic) return;
-      
-      const data = new Uint8Array([leftByte, rightByte]);
-      
-      try {
-        if (controlCharacteristic.properties.writeWithoutResponse) {
-          await controlCharacteristic.writeValueWithoutResponse(data);
-        } else {
-          await controlCharacteristic.writeValue(data);
-        }
-      } catch (e) {
-        console.warn("BLE Schreib-Warnung:", e);
-      }
-    }
-
-    requestAnimationFrame(loop);
-  </script>
+        // Schub auf 0 setzen beim Loslassen (Sicherheitsfunktion)
+        document.getElementById('thrust-slider').addEventListener('touchend', (e) => {
+            e.target.value = 0;
+        });
+        document.getElementById('thrust-slider').addEventListener('mouseup', (e) => {
+            e.target.value = 0;
+        });
+    </script>
 </body>
 </html>
